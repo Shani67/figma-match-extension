@@ -200,7 +200,7 @@ Figma's OAuth flow needs a client secret. A secret shipped inside an extension c
 
 ---
 
-## Tips for Web Lankan themes
+## Tips for themes
 
 - **Pin sections to Figma nodes.** Add `data-figma-node="12:345"` to each section's wrapper, only when `WP_DEBUG` is on. Auto-match then links that section correctly every time.
 - **Expose Lenis in dev.** Lenis is created inside a closure in `assets/js/site.js`. Exposing it in development (`window.lenis = lenis;`) lets **Freeze** switch smooth scrolling off completely before captures.
