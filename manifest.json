@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Figma Match \u2013 Design QA",
+  "short_name": "Figma Match",
+  "version": "1.1.0",
+  "description": "Compare a live page with its Figma desktop frame: overlay, pixel diff per section and a typography/spacing spec check.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Open Figma Match controls",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "scripting",
+    "tabs",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://api.figma.com/*",
+    "https://figma-alpha-api.s3.us-west-2.amazonaws.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'none';img-src 'self' data: blob: https://*.figma.com https://*.amazonaws.com; connect-src 'self' data: blob: https://api.figma.com https://*.figma.com https://*.amazonaws.com"
+  }
+}

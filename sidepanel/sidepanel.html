@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Figma Match</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <script type="module" src="sidepanel.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="../icons/icon32.png" alt="" width="20" height="20">
+      <span>Figma Match</span>
+    </div>
+    <div class="account" id="account" hidden>
+      <img id="avatar" alt="" width="22" height="22" referrerpolicy="no-referrer">
+      <span id="handle"></span>
+      <button class="btn ghost small" id="signout" type="button" title="Sign out and delete the stored token">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ LOGIN ============ -->
+    <section id="view-login" class="view" hidden>
+      <h1>Connect your Figma account</h1>
+      <p class="muted">Sign in once with a read-only personal access token from your Figma account. Then you can open any frame you have access to and compare it with the page.</p>
+      <ol class="steps">
+        <li>Open <a href="https://www.figma.com/settings" target="_blank" rel="noopener noreferrer">Figma → Settings → Security</a>.</li>
+        <li>Under <b>Personal access tokens</b>, click <b>Generate new token</b>. Name it “Figma Match” and pick an expiry (90 days is a good default).</li>
+        <li>Choose only these scopes: <b>File content → Read-only</b> and <b>Current user → Read</b>.</li>
+        <li>Copy the token and paste it below.</li>
+      </ol>
+      <form id="login-form" autocomplete="off">
+        <label class="field">
+          <span>Personal access token</span>
+          <span class="input-row">
+            <input type="password" id="token" spellcheck="false" autocomplete="off" placeholder="figd_…" required>
+            <button class="btn ghost small" type="button" id="toggle-token">Show</button>
+          </span>
+        </label>
+        <label class="check"><input type="checkbox" id="remember" checked> Keep me signed in on this computer</label>
+        <button type="submit" class="btn primary block" id="login-btn">Connect Figma</button>
+        <p class="error" id="login-err" role="alert"></p>
+      </form>
+      <details class="note">
+        <summary>How is my token protected?</summary>
+        <ul>
+          <li>It is encrypted with AES-256 before it is stored. The key can't be exported and is kept in this extension's own storage.</li>
+          <li>It is only ever sent to <code>api.figma.com</code>, in a request header. It is never sent to the pages you test.</li>
+          <li>If you untick “Keep me signed in”, the token stays in memory and is removed when Chrome closes.</li>
+          <li><b>Sign out</b> deletes the token, the key and all cached designs. You can also revoke the token in Figma at any time.</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- ============ MAIN ============ -->
+    <section id="view-main" class="view" hidden>
+
+      <div class="card" id="site-card">
+        <div class="card-head">
+          <h2>Page</h2>
+          <span class="pill" id="site-state"></span>
+        </div>
+        <p class="url" id="site-url"></p>
+        <button class="btn primary block" id="allow-site" type="button" hidden>Allow on this site</button>
+        <p class="muted small" id="site-hint"></p>
+      </div>
+
+      <div class="card" id="design-card">
+        <div class="card-head"><h2>Figma frame</h2></div>
+        <form id="design-form" class="input-row">
+          <input type="url" id="figma-url" placeholder="Paste link to the desktop frame" spellcheck="false" required>
+          <button class="btn primary" id="load-design" type="submit">Load</button>
+        </form>
+        <div id="design-info" class="design-info" hidden>
+          <div class="kv"><span>Frame</span><b id="d-name"></b></div>
+          <div class="kv"><span>Size</span><b id="d-size"></b></div>
+          <div class="kv"><span>Sections · Texts</span><b id="d-counts"></b></div>
+          <div class="kv"><span>Fetched</span><b id="d-fetched"></b></div>
+          <div class="row gap">
+            <button class="btn small" id="refresh-design" type="button">Refresh from Figma</button>
+            <button class="btn small ghost" id="unlink-design" type="button">Unlink</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="env-card">
+        <div class="card-head">
+          <h2>Test conditions</h2>
+          <button class="btn ghost small" id="vp-refresh" type="button" title="Measure the page width again">Re-measure</button>
+        </div>
+        <div class="vp" id="vp-status">
+          <b id="vp-text">Page width unknown</b>
+          <span class="muted small" id="vp-help"></span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="scrollbar-toggle" checked>
+          <span class="track"></span>
+          <span class="label">Hide page scrollbar (so the page uses the full width)</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="freeze-toggle">
+          <span class="track"></span>
+          <span class="label">Freeze animations, sliders and smooth scroll</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="lock-toggle">
+          <span class="track"></span>
+          <span class="label">Force exactly <b id="lock-width">frame</b> px <span class="muted">(only if the window is narrower)</span></span>
+        </label>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="overlay" aria-selected="true">Overlay</button>
+        <button role="tab" data-tab="sections" aria-selected="false">Sections</button>
+        <button role="tab" data-tab="diff" aria-selected="false">Pixel diff</button>
+        <button role="tab" data-tab="spec" aria-selected="false">Spec check</button>
+      </nav>
+
+      <p class="callout" id="not-ready" hidden></p>
+
+      <!-- Overlay -->
+      <div class="tabpanel" id="tab-overlay" role="tabpanel">
+        <label class="switch">
+          <input type="checkbox" id="ov-visible">
+          <span class="track"></span>
+          <span class="label">Show overlay on page</span>
+        </label>
+
+        <div class="field">
+          <span>Image</span>
+          <div class="seg">
+            <label><input type="radio" name="ov-source" value="design" checked><span>Figma design</span></label>
+            <label><input type="radio" name="ov-source" value="diff" id="ov-source-diff"><span>Diff heatmap</span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>Blend</span>
+          <div class="seg">
+            <label><input type="radio" name="ov-blend" value="normal" checked><span>Normal</span></label>
+            <label><input type="radio" name="ov-blend" value="difference"><span>Difference</span></label>
+          </div>
+          <span class="muted small">Difference: pixels that match turn black and changes light up.</span>
+        </div>
+
+        <label class="field">
+          <span>Opacity <b id="ov-opacity-val">50%</b></span>
+          <input type="range" id="ov-opacity" min="5" max="100" step="1" value="50">
+        </label>
+
+        <div class="field">
+          <span>Offset (px)</span>
+          <div class="offsets">
+            <div class="nudge">
+              <span>X</span>
+              <button class="btn small" data-nudge="x:-1" type="button" aria-label="Move left">−</button>
+              <input type="number" id="ov-x" value="0" step="1">
+              <button class="btn small" data-nudge="x:1" type="button" aria-label="Move right">+</button>
+            </div>
+            <div class="nudge">
+              <span>Y</span>
+              <button class="btn small" data-nudge="y:-1" type="button" aria-label="Move up">−</button>
+              <input type="number" id="ov-y" value="0" step="1">
+              <button class="btn small" data-nudge="y:1" type="button" aria-label="Move down">+</button>
+            </div>
+            <button class="btn small ghost" id="ov-reset" type="button">Reset</button>
+          </div>
+        </div>
+
+        <details class="note" open>
+          <summary>Keyboard shortcuts (on the page)</summary>
+          <ul class="keys">
+            <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> show / hide overlay</li>
+            <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> normal / difference</li>
+            <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd> design / diff heatmap</li>
+            <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>←↑→↓</kbd> nudge 1px (add <kbd>Ctrl</kbd> for 10px)</li>
+            <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd> opacity · <kbd>0</kbd> reset offset</li>
+          </ul>
+        </details>
+      </div>
+
+      <!-- Sections -->
+      <div class="tabpanel" id="tab-sections" role="tabpanel" hidden>
+        <p class="muted small">Link each Figma section to its element on the page. Sections are then compared on their own, so a section that is taller or shorter doesn't shift the results for everything below it.</p>
+        <div class="row gap">
+          <button class="btn" id="sec-auto" type="button">Auto-match</button>
+          <button class="btn ghost" id="sec-clear" type="button">Clear all</button>
+        </div>
+        <p class="muted small">Tip: add <code>data-figma-node="1:23"</code> to a section in the theme (dev only) and Auto-match will always link it correctly.</p>
+        <ul class="list" id="sec-list"></ul>
+      </div>
+
+      <!-- Diff -->
+      <div class="tabpanel" id="tab-diff" role="tabpanel" hidden>
+        <label class="field">
+          <span>Sensitivity <b id="diff-threshold-val">0.10</b></span>
+          <input type="range" id="diff-threshold" min="0.03" max="0.3" step="0.01" value="0.1">
+          <span class="muted small">Lower is stricter. 0.10 ignores tiny anti-aliasing differences.</span>
+        </label>
+        <button class="btn primary block" id="diff-run" type="button">Run pixel diff</button>
+        <div id="diff-out"></div>
+      </div>
+
+      <!-- Spec -->
+      <div class="tabpanel" id="tab-spec" role="tabpanel" hidden>
+        <p class="muted small">Checks every Figma text layer against the matching element on the page: font, size, weight, line height, letter spacing, colour, case, line wrapping and position.</p>
+        <button class="btn primary block" id="spec-run" type="button">Run spec check</button>
+        <div class="chips" id="spec-filters" hidden></div>
+        <div id="spec-out"></div>
+      </div>
+
+      <div class="card export" id="export-card" hidden>
+        <button class="btn block" id="copy-report" type="button">Copy fix list (Markdown)</button>
+        <p class="muted small">Paste it into a ticket or into Claude Code to fix the issues.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="status" id="status" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
